@@ -1,6 +1,5 @@
-from flask import Flask
+from flask import Flask, request
 from flask_api import status
-import requests
 
 from utils import *
 
@@ -12,7 +11,7 @@ app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def main():
 
-  configs = requests.data
+  configs = json.loads(request.data)
 
   project_ids = configs['project_ids']
 
