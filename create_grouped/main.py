@@ -12,7 +12,7 @@ app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def main():
 
-  configs = request.data
+  configs = requests.data
 
   project_ids = configs['project_ids']
 
