@@ -56,3 +56,5 @@ def main():
 
       create_or_update_view(bigquery_client, grouped_query, f'{project_id}.{dataset_name}.{dataset_name}')
 
+  return "Success!", status.HTTP_200_OK
+
