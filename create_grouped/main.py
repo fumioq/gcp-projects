@@ -9,10 +9,12 @@ import os
 
 app = Flask(__name__)
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['POST'])
 def main():
 
-  project_ids = requests.args.get('project_ids')
+  configs = request.data
+
+  project_ids = configs['project_ids']
 
   scopes = [
       "https://www.googleapis.com/auth/bigquery",
@@ -31,7 +33,7 @@ def main():
   structure_df_standard = ws.get_as_df()
   structure_df_standard.set_index("fields", inplace = True)
 
-  project_ids = ['agency1-367013', 'agency2-367013', 'agency3']
+  # project_ids = ["agency1-367013", "agency2-367013", "agency3"]
 
   for project_id in project_ids:
     print(project_id)
