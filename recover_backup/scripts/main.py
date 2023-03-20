@@ -21,7 +21,7 @@ def main():
   url_token = request.args.get('url_token')
 
   if url_token != 'ash6ae51ha6e87j3w':
-    return status.HTTP_401_UNAUTHORIZED
+    return 'Invalid token', status.HTTP_401_UNAUTHORIZED
 
   project_id = table_id.split('.')[0]
   dataset_name = table_id.split('.')[1]
