@@ -32,8 +32,6 @@ def main():
   structure_df_standard = ws.get_as_df()
   structure_df_standard.set_index("fields", inplace = True)
 
-  # project_ids = ["agency1-367013", "agency2-367013", "agency3"]
-
   for project_id in project_ids:
     print(project_id)
     bigquery_client = auth_bigquery(service_account_json, project_id, scopes)
