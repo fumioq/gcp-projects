@@ -2,6 +2,63 @@ from configs import *
 import json
 from google.cloud import bigquery
 from google.cloud import storage
+from google.cloud import exceptions
+
+
+def create_table_from_blob(bq_client : bigquery.Client, blob : storage.Blob, blobs_received : int) -> int:
+  """Create table of view from sotrage blob of the given date (if exists)
+
+  Args:
+      gcp_credentials (bigquery.Client): credentials for 
+      blob (storage.Blob): _description_
+
+  Returns:
+      int: blobs counter
+  """
+
+  type_dictionary = {
+    'VIEW' : create_view_from_json,
+    'GOOGLE_SHEETS' : create_googlesheets_from_json,
+    'STORAGE' : create_storage_table_from_json,
+  }
+
+  with blob.open("r") as f:
+    blobs_received += 1
+    json_data = json.loads(f.read())
+
+    request_table_id = blob.name.split('--')[1].replace('.json', '')
+
+    print('_________________________________________________')
+    print(request_table_id)
+
+    type_dictionary[json_data['sourceFormat']](bq_client, json_data, request_table_id)
+  #end with
+
+  return blobs_received
+
+
+def create_view_from_json(bq_client : bigquery.Client, json_data : object, request_table_id : str) -> None:
+  """Create view from json file data
+
+  Args:
+      bq_client (bigquery.Client): service account authenticated bigquery client
+      json_data (object): view restore information (view_query)
+      request_table_id (str): table_id in project_id.dataset_name.table_name format
+  """
+  print(f'Creating {json_data["sourceFormat"]}')
+
+  table = bigquery.Table(f'{request_table_id}')
+  table.view_query = json_data['viewQuery']
+
+  bq_client.delete_table(f'{request_table_id}', not_found_ok=True)
+
+  try:
+    table = bq_client.create_table(table)
+
+  except exceptions.NotFound:
+    print(f'View referenciando uma tabela que não existe ainda. View comentada criada.')
+    table.view_query = '--Recuperar Backup Log - Alguma tabela utilizada nessa view não foi encontrada. Corrija e descomente a view abaixo.\n\n'+'SELECT 1\n' + json_data['viewQuery'].replace('\n', '\n--')
+    table = bq_client.create_table(table)
 
 
 def generate_schema_from_json(json_schema : object) -> list[bigquery.SchemaField]:
@@ -21,25 +78,7 @@ def generate_schema_from_json(json_schema : object) -> list[bigquery.SchemaField
   return schema
 
 
-def createViewFromJson(bq_client : bigquery.Client, json_data : object, request_table_id : str) -> None:
-  """Create view from json file data
-
-  Args:
-      bq_client (bigquery.Client): service account authenticated bigquery client
-      json_data (object): view restore information (view_query)
-      request_table_id (str): table_id in project_id.dataset_name.table_name format
-  """
-  print(f'Creating {json_data["sourceFormat"]}')
-
-  table = bigquery.Table(f'{request_table_id}')
-  table.view_query = json_data['viewQuery']
-
-  bq_client.delete_table(f'{request_table_id}', not_found_ok=True)
-
-  table = bq_client.create_table(table)
-
-
-def createGoogleSheetsFromJson(bq_client : bigquery.Client, json_data : object, request_table_id : str) -> None:
+def create_googlesheets_from_json(bq_client : bigquery.Client, json_data : object, request_table_id : str) -> None:
   """Create external table from json file data
 
   Args:
@@ -60,30 +99,21 @@ def createGoogleSheetsFromJson(bq_client : bigquery.Client, json_data : object, 
   table = bq_client.create_table(table)
 
 
-
-def createTableFromBlob(bq_client : bigquery.Client, blob : storage.Blob, blobs_received : int) -> int:
-  """Create table of view from sotrage blob of the given date (if exists)
+def create_storage_table_from_json(bq_client : bigquery.Client, json_data : object, request_table_id : str) -> None:
+  """Create external table from json file data
 
   Args:
-      gcp_credentials (bigquery.Client): credentials for 
-      blob (storage.Blob): _description_
-
-  Returns:
-      int: blobs counter
+      bq_client (bigquery.Client): service account authenticated bigquery client
+      json_data (object): google sheets restore information
+      request_table_id (str): table_id in project_id.dataset_name.table_name format
   """
+  print(f'Creating {json_data["sourceFormat"]}')
+  table = bigquery.Table(f'{request_table_id}')
 
-  type_dictionary = {
-    'VIEW' : createViewFromJson,
-    'GOOGLE_SHEETS' : createGoogleSheetsFromJson,
-  }
+  external_config = bigquery.ExternalConfig("AVRO")
+  external_config.source_uris = json_data['sourceUris']
+  external_config.autodetect = True
+  table.external_data_configuration = external_config
 
-  with blob.open("r") as f:
-    blobs_received += 1
-    json_data = json.loads(f.read())
-
-    request_table_id = blob.name.split('--')[1].replace('.json', '')
-
-    type_dictionary[json_data['sourceFormat']](bq_client, json_data, request_table_id)
-  #end with
-
-  return blobs_received
+  bq_client.delete_table(f'{request_table_id}', not_found_ok=True)
+  table = bq_client.create_table(table)

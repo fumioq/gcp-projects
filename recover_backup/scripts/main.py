@@ -43,35 +43,59 @@ def main():
 
   print(rollback_date_string)
 
-  reroll_whole_dataset = len(table_id.split('.')) != 3
+  reroll_one_dataset = len(table_id.split('.')) == 3
 
   blobs_received = 0
 
-  if reroll_whole_dataset:
-    dataset_token = request.args.get('dataset_token')
-    if dataset_token != 'secretpass':
-      print("Invalid Token. Ignoring request.")
-    #end if
+  if reroll_one_dataset:
+    print("Rollback one table")
+    try:
+      blob = bucket.blob(f'{project_id}/{dataset_name}/{rollback_date_string}--{table_id}.json')
+      blobs_received = create_table_from_blob(bq_client, blob, blobs_received)
+    except:
+      print(f'There is no backup of date {rollback_date_string} for {table_id} table/view.')
+    return 'Success!', status.HTTP_200_OK
+  #end if
 
-    print("Rollback whole dataset")
-    dataset_blob_list = bucket.list_blobs(prefix=f'{project_id}/{dataset_name}/{rollback_date_string}')
-    for blob in dataset_blob_list:
-      blobs_received = createTableFromBlob(bq_client, blob, blobs_received)
-    #end for
+  print("Rollback whole dataset")
+
+  dataset_token = request.args.get('dataset_token')
+  if dataset_token != 'datageeks':
+    print("Invalid Token. Ignoring request.")
+    return 'Invalid Token', status.HTTP_403_FORBIDDEN
+  #end if
+
+  try:
+    bq_client.get_dataset(table_id)
+  except:
+    bq_client.create_dataset(table_id)
+
+  views_blobs = []
+
+  dataset_blob_list = bucket.list_blobs(prefix=f'{project_id}/{dataset_name}/{rollback_date_string}')
+  for blob in dataset_blob_list:
+    with blob.open("r") as f:
+      blobs_received += 1
+      json_data = json.loads(f.read())
+
+      if json_data['sourceFormat'] == 'VIEW':
+        views_blobs.append(blob)
+        continue
+
+      blobs_received = create_table_from_blob(bq_client, blob, blobs_received)
+    #end with
+  #end for
+
+  for blob in views_blobs:
+    try:
+      blobs_received = create_table_from_blob(bq_client, blob, blobs_received)
+    except Exception as e:
+      print(e)
+  #end for
 
     if blobs_received == 0:
       print(f'There is no backup of date {rollback_date_string} for {table_id} dataset.')
     #end if
   #end if
-
-
-  else:
-    print("Rollback one table")
-    try:
-      blob = bucket.blob(f'{project_id}/{dataset_name}/{rollback_date_string}--{table_id}.json')
-      blobs_received = createTableFromBlob(bq_client, blob, blobs_received)
-    except:
-      print(f'There is no backup of date {rollback_date_string} for {table_id} table/view.')
-  #end else
 
   return 'Success!', status.HTTP_200_OK
