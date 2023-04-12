@@ -1,10 +1,12 @@
 # Welcome to my GCP related projects' portfolio!
 All files were made by Leandro Fumio Kino.
 
+[![Project Status: Active  The project is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+
 Here, you can read more about my personal projects and how they may help you in your routine tasks with Python and SQL in your GCP projects.
 
 ## About me
-I have 2 years of experience with Data Engineer and Cloud Solutions. I've been working in a worldwide digital marketing agency, and I'm responsible for all data-related automations of all data engineers and business intelligence analysts.
+With 2 years of experience as Data Engineer and Cloud Solutions, I've been working in a worldwide digital marketing agency, and I'm responsible for all data-related automations of all data engineers and business intelligence analysts. Also, I have 6 years as Mechanical Engineering in R&D.
 
 ## About the projects:
 ### [Case/When from sheets to Bigquery](https://github.com/fumioq/gcp-projects/tree/main/case_when_sheets_to_bq/scripts)
