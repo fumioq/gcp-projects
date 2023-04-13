@@ -1,5 +1,5 @@
 # ignore python notebooks
-*.ipynb
+main.ipynb
 
 # ignore pyache
 __pycache__/
