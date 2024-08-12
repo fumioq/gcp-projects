@@ -1,0 +1,6 @@
+selenium
+google-cloud-storage
+pygsheets
+pandas
+numpy
+httplib2shim
