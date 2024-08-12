@@ -4,8 +4,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.errorhandler import MoveTargetOutOfBoundsException
 from selenium.common.exceptions import NoSuchElementException
+from flask import Flask
 import httplib2shim
-from google_auth_httplib2 import AuthorizedHttp
 
 import re
 import os
@@ -24,104 +24,110 @@ SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
 ]
 
-SERVICE_ACCOUNT_JSON = json.loads(os.environ['GCP_SERVICE_ACCOUNT'], strict= False)
+app = Flask(__name__)
 
-gcp_credentials = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
-storage_client = storage.Client(project = 'gcp-project-365616', credentials = gcp_credentials)
-bucket = storage_client.get_bucket('amazon_scrapper')
+@app.route('/', methods=['GET'])
+def main():
+    SERVICE_ACCOUNT_JSON = json.loads(os.environ['GCP_SERVICE_ACCOUNT'], strict= False)
 
-blob = bucket.blob('cookies.json')
+    gcp_credentials = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
+    storage_client = storage.Client(project = 'gcp-project-365616', credentials = gcp_credentials)
+    bucket = storage_client.get_bucket('amazon_scrapper')
 
-print('Storage ok!')
+    blob = bucket.blob('cookies.json')
 
-http = httplib2shim.Http()
-client = pygsheets.authorize(service_account_env_var = 'GCP_SERVICE_ACCOUNT', http = http)
+    print('Storage ok!')
 
-ss = client.open_by_url('https://docs.google.com/spreadsheets/d/1j-1C5fcGCxZCT2ZsgQKOxkyEjNsNeYChsTvzxQWpgvE/edit#gid=0')
-print('Ss openned!')
+    http = httplib2shim.Http()
+    client = pygsheets.authorize(service_account_env_var = 'GCP_SERVICE_ACCOUNT', http = http)
 
-with blob.open() as f:
-    cookies = json.loads(f.read())
+    ss = client.open_by_url('https://docs.google.com/spreadsheets/d/1j-1C5fcGCxZCT2ZsgQKOxkyEjNsNeYChsTvzxQWpgvE/edit#gid=0')
+    print('Ss openned!')
 
-ffOptions = Options()
-ffOptions.add_argument("-headless")
+    with blob.open() as f:
+        cookies = json.loads(f.read())
 
-driver = webdriver.Firefox(options=ffOptions)
+    ffOptions = Options()
+    ffOptions.add_argument("-headless")
 
-driver.get("https://www.amazon.com.br")
+    driver = webdriver.Firefox(options=ffOptions)
 
-for cookie in cookies:
-    driver.add_cookie(cookie)
+    driver.get("https://www.amazon.com.br")
 
-driver.get("https://www.amazon.com.br/hz/wishlist/ls/?ref=cm_wl_your_lists")
-assert "Amazon.com.br" in driver.title
-print('Logged in!')
+    for cookie in cookies:
+        driver.add_cookie(cookie)
 
-actions_chains = webdriver.ActionChains(driver)
+    driver.get("https://www.amazon.com.br/hz/wishlist/ls/?ref=cm_wl_your_lists")
+    assert "Amazon.com.br" in driver.title
+    print('Logged in!')
 
-with blob.open("w") as f:
-    f.write(json.dumps(driver.get_cookies()))
+    actions_chains = webdriver.ActionChains(driver)
 
-fully_loaded = False 
+    with blob.open("w") as f:
+        f.write(json.dumps(driver.get_cookies()))
 
-while not fully_loaded:
-    try:
-        nav_footer = driver.find_element(By.ID, 'navFooter')
-        actions_chains.scroll_to_element(nav_footer).perform()
-        sleep(2)
-        fully_loaded = True
-    except MoveTargetOutOfBoundsException:
-        actions_chains.scroll_by_amount(0, 2000).perform()
-        sleep(1)
+    fully_loaded = False 
 
-elements = driver.find_elements(By.CSS_SELECTOR,'li[data-id="2GU2ZQQOILS7P"]')
+    while not fully_loaded:
+        try:
+            nav_footer = driver.find_element(By.ID, 'navFooter')
+            actions_chains.scroll_to_element(nav_footer).perform()
+            sleep(2)
+            fully_loaded = True
+        except MoveTargetOutOfBoundsException:
+            actions_chains.scroll_by_amount(0, 2000).perform()
+            sleep(1)
 
-new_data = []
+    elements = driver.find_elements(By.CSS_SELECTOR,'li[data-id="2GU2ZQQOILS7P"]')
 
-now = datetime.now()
-now_str = now.strftime('%Y-%m-%d')
+    new_data = []
 
-for item in elements:
-    try:
-        texto_frete = item.find_element(By.CSS_SELECTOR, 'span[class="a-color-secondary a-size-base"]').text
-        preco_frete = re.sub(r'[^\d,]', '', texto_frete)
-        preco_frete = float(preco_frete.replace(',', '.'))
+    now = datetime.now()
+    now_str = now.strftime('%Y-%m-%d')
 
-    except NoSuchElementException:
-        preco_frete = 0
+    for item in elements:
+        try:
+            texto_frete = item.find_element(By.CSS_SELECTOR, 'span[class="a-color-secondary a-size-base"]').text
+            preco_frete = re.sub(r'[^\d,]', '', texto_frete)
+            preco_frete = float(preco_frete.replace(',', '.'))
 
-    new_data.append([
-        now_str,
-        item.get_attribute('data-itemid'),
-        item.find_element(By.CSS_SELECTOR, 'a[class="a-link-normal"]').get_attribute('title'),
-        float(item.get_attribute('data-price')) + preco_frete
-    ])
+        except NoSuchElementException:
+            preco_frete = 0
 
-print('Data extracted!')
+        new_data.append([
+            now_str,
+            item.get_attribute('data-itemid'),
+            item.find_element(By.CSS_SELECTOR, 'a[class="a-link-normal"]').get_attribute('title'),
+            float(item.get_attribute('data-price')) + preco_frete
+        ])
 
-ws = ss.worksheet()
-df = ws.get_as_df()
+    print('Data extracted!')
 
-if now_str in df['Date'].unique():
-    df = df[df['Date'] != now_str]
-    df_new_data = pd.DataFrame(new_data, columns=df.columns)
-    df_new_data = df_new_data.replace([np.inf, -np.inf], 0)
-    df = pd.concat([df_new_data, df])
-    print(f'Updating {len(new_data)} rows')
-    ws.set_dataframe(
-        df,
-        'A1'
-    )
+    ws = ss.worksheet()
+    df = ws.get_as_df()
 
-else:
-    df_new_data = pd.DataFrame(new_data, columns=df.columns)
-    df_new_data = df_new_data.replace([np.inf, -np.inf], 0)
-    print(f'Inserting {len(new_data)} rows')
-    ws.insert_rows(
-        1,
-        len(df_new_data),
-        df_new_data.values.tolist(),
-    )
+    if now_str in df['Date'].unique():
+        df = df[df['Date'] != now_str]
+        df_new_data = pd.DataFrame(new_data, columns=df.columns)
+        df_new_data = df_new_data.replace([np.inf, -np.inf], 0)
+        df = pd.concat([df_new_data, df])
+        print(f'Updating {len(new_data)} rows')
+        ws.set_dataframe(
+            df,
+            'A1'
+        )
 
-driver.close()
-print('Success!')
+    else:
+        df_new_data = pd.DataFrame(new_data, columns=df.columns)
+        df_new_data = df_new_data.replace([np.inf, -np.inf], 0)
+        print(f'Inserting {len(new_data)} rows')
+        ws.insert_rows(
+            1,
+            len(df_new_data),
+            df_new_data.values.tolist(),
+        )
+
+    driver.close()
+
+    print('Success!')
+    return 'Success!', 200

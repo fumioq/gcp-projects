@@ -4,3 +4,4 @@ pygsheets
 pandas
 numpy
 httplib2shim
+gunicorn

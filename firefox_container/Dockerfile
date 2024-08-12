@@ -16,4 +16,4 @@ ENV APP_HOME /app
 WORKDIR $APP_HOME
 COPY ./$APP_HOME .
 
-CMD ["python", "-u", "main.py"]
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 main:app
